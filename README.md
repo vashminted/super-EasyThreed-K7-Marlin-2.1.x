@@ -9,6 +9,7 @@ Updated to Marlin 2.1.X bugfix (oct 2025)
 This firmware is intended to be used with my EasyThreed K7 mods to completely rebuild the easythreed k7 to use real stepper mottors and hotend. Stl files and reference images can be found on printables and the original files on thinkercad.
 
 This mod assumes you are using at least: 
+
 -Nema 17 stepper motors for all axis and the extruder.
 
 -12V 10AMP power supply.
@@ -30,7 +31,7 @@ This mod assumes you are using at least:
     -Heatbed is enabled, set to zero on slicer if not installed.
     -Advanced pause and m600 command enabled for mid-print filament change.
 
-Button behavior:
+#  Button behavior:
 
 # PRINT Button
 
