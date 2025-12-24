@@ -17,7 +17,7 @@ This mod assumes you are using at least:
 -Bowden titan extruder
 -MK8 hotend
 
-Features included
+# Features included
 -MPC auto tune for the hoted, better than PID and more stable
 -improved functionality of the 4 leveling buttons, home button, and feed/retract switch.
 -linear advance and input shaping are enabled by defaut
@@ -26,7 +26,7 @@ Features included
 
 Button behavior:
 
-PRINT Button
+# PRINT Button
 
   Idle State:
      -Short Press: Prints the latest file on sd card
@@ -39,7 +39,7 @@ PRINT Button
   Paused / M600 Waiting:
      -Short Press: Resumes priniting
 
-FEED / RETRACT Buttons:
+# FEED / RETRACT Buttons:
 
   Idle State:
      -preheat the nozzle to 220C and loads/unloads filament
@@ -50,7 +50,7 @@ FEED / RETRACT Buttons:
   Paused:
      -preheat the nozzle to 220C and loads/unloads filament, for manual filament changes
  
-Home button.
+# Home button.
 
   Idle State:
       -Short Press: Home all axes (corner 1 for leveling)
@@ -58,20 +58,20 @@ Home button.
   
   Active Printing: Cycles through printing speed 100%, 125%, 160%, 200%} using M220.
 
-Leveling buttons:
+# Leveling buttons:
      
-  -Button1:
+  # -Button1:
     -Idle: Moves printhead to safe zone
     -Printing: increases flow +5%
-  -Button2:
+ #  -Button2:
     -Idle: Moves to corner 2 for leveling
     -Printing: decreases flow -5%
-  -Button3:
-   -Idle: Moves to corner 3 for leveling
-   -Printing: increases temp +5 degrees
-  -Button4:
-   -Idle: Moves to corner 4 for leveling
-   -Printing: decreases temp -5 degrees
+ # -Button3:
+    -Idle: Moves to corner 3 for leveling
+    -Printing: increases temp +5 degrees
+#  -Button4:
+    -Idle: Moves to corner 4 for leveling
+    -Printing: decreases temp -5 degrees
 
 Installation:
 The board's bootloader is proprietary by MKS, which reads a binary firmware file mksLite.bin from the SD card on boot.
