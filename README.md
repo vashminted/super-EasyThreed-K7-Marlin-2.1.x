@@ -28,16 +28,16 @@ Button behavior:
 
 # PRINT Button
 
-  Idle State:
-     -Short Press: Prints the latest file on sd card
-     -Long Press: Rises the printhead 2cm
+      Idle State:
+         -Short Press: Prints the latest file on sd card
+         -Long Press: Rises the printhead 2cm
 
-  Active Printing:
-     -Short Press: Pauses and moves the nozzle to a safe zone
-     -Long Press: cancels current print job
+      Active Printing:
+         -Short Press: Pauses and moves the nozzle to a safe zone
+         -Long Press: cancels current print job
 
-  Paused / M600 Waiting:
-     -Short Press: Resumes priniting
+      Paused / M600 Waiting:
+         -Short Press: Resumes priniting
 
 # FEED / RETRACT Buttons:
 
