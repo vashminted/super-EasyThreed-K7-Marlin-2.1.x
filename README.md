@@ -10,11 +10,17 @@ This firmware is intended to be used with my EasyThreed K7 mods to completely re
 
 This mod assumes you are using at least: 
 -Nema 17 stepper motors for all axis and the extruder.
+
 -12V 10AMP power supply.
+
 -endstops for all axis.
+
 -no autolevel.
+
 -Heatbed (optional).
+
 -Bowden titan extruder.
+
 -MK8 hotend.
 
 # Features included
@@ -41,22 +47,22 @@ Button behavior:
 
 # FEED / RETRACT Buttons:
 
-  Idle State:
+      Idle State:
      -preheat the nozzle to 220C and loads/unloads filament
  
-  Active Printing:
+      Active Printing:
      -disabled during printing
 
-  Paused:
+      Paused:
      -preheat the nozzle to 220C and loads/unloads filament, for manual filament changes
  
 # Home button.
 
-  Idle State:
+      Idle State:
       -Short Press: Home all axes (corner 1 for leveling)
       -Long Press: Performs hotend temperature autotune (M306)
   
-  Active Printing: Cycles through printing speed 100%, 125%, 160%, 200%} using M220.
+      Active Printing: Cycles through printing speed 100%, 125%, 160%, 200%} using M220.
 
 # Leveling buttons:
      
