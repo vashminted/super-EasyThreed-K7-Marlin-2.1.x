@@ -1,0 +1,517 @@
+/**
+ * Marlin 3D Printer Firmware
+ * Copyright (c) 2021 MarlinFirmware [https://github.com/MarlinFirmware/Marlin]
+ *
+ * Basado en Sprinter and grbl.
+ * Copyright (c) 2011 Camiel Gubbels / Erik van der Zalm
+ *
+ * Modificado: Lógica de LED duplicada para HOME_LED_PIN implementada.
+ */
+
+#include "../inc/MarlinConfigPre.h"
+
+#if ENABLED(EASYTHREED_UI)
+
+#include "easythreed_ui.h"
+#include "pause.h"
+#include "../module/temperature.h"
+#include "../module/printcounter.h"
+#include "../sd/cardreader.h"
+#include "../gcode/queue.h"
+#include "../module/motion.h"
+#include "../module/planner.h"
+#include "../MarlinCore.h"
+#include "../module/stepper.h"
+#include "../inc/MarlinConfig.h"
+
+EasythreedUI easythreed_ui;
+
+#define BTN_DEBOUNCE_MS 20
+#define UI_MAX_TEMP 250
+
+// --- VARIABLES GLOBALES COMPARTIDAS (FIX) ---
+static uint8_t shared_flowrate = 100; 
+static uint8_t shared_feedrate_index = 1; // 100% por defecto
+
+// ***************************************************************
+// ** ENUMERACIÓN DE INTERVALOS (NECESARIO AQUÍ PARA INICIALIZACIÓN) **
+// ***************************************************************
+enum LEDInterval : uint16_t {
+  LED_OFF     =    0,
+  LED_ON      = 4000, 
+  LED_BLINK_0 = 2500,
+  LED_BLINK_1 = 1500,
+  LED_BLINK_2 = 1000,
+  LED_BLINK_3 =  800,
+  LED_BLINK_4 =  500,
+  LED_BLINK_5 =  300,
+  LED_BLINK_6 =  150,
+  LED_BLINK_7 =   50
+};
+// ***************************************************************
+
+// --- VARIABLES GLOBALES DE INTERVALO DE LED ---
+// Intervalo para el LED de Print (EASYTHREED_LED_PIN)
+uint16_t blink_interval_ms = LED_ON;   
+// Intervalo para el LED de Home (HOME_LED_PIN)
+uint16_t home_led_interval_ms = LED_ON; 
+
+
+void EasythreedUI::init() {
+  SET_INPUT_PULLUP(BTN_HOME);     SET_OUTPUT(BTN_HOME_GND);
+  SET_INPUT_PULLUP(BTN_FEED);     SET_OUTPUT(BTN_FEED_GND);
+  SET_INPUT_PULLUP(BTN_RETRACT);  SET_OUTPUT(BTN_RETRACT_GND);
+  SET_INPUT_PULLUP(BTN_PRINT);
+  SET_OUTPUT(EASYTHREED_LED_PIN);
+  SET_OUTPUT(HOME_LED_PIN);
+  
+  SET_INPUT_PULLDOWN(BTN_1);
+  SET_INPUT_PULLDOWN(BTN_2);
+  SET_INPUT_PULLDOWN(BTN_3);
+  SET_INPUT_PULLDOWN(BTN_4);
+ 
+  
+  // Estado inicial apagado (ASUMIENDO Active LOW, como el LED original)
+  WRITE(HOME_LED_PIN, HIGH); 
+}
+
+void EasythreedUI::run() {
+  blinkLED2(); // Controla HOME_LED_PIN (USANDO home_led_interval_ms)
+  blinkLED();  // Controla EASYTHREED_LED_PIN (USANDO blink_interval_ms)
+  loadButton();
+  printButton();
+  HomeButton();
+  HandleButton1();
+  HandleButton2();
+  HandleButton3();
+  HandleButton4();
+}
+
+void EasythreedUI::blinkLED() {
+  static millis_t prev_blink_interval_ms = 0, blink_start_ms = 0;
+
+  if (blink_interval_ms == LED_OFF) { WRITE(EASYTHREED_LED_PIN, HIGH); return; } // OFF (HIGH)
+  if (blink_interval_ms >= LED_ON)  { WRITE(EASYTHREED_LED_PIN,  LOW); return; } // ON (LOW)
+
+  const millis_t ms = millis();
+  if (prev_blink_interval_ms != blink_interval_ms) {
+    prev_blink_interval_ms = blink_interval_ms;
+    blink_start_ms = ms;
+  }
+  
+  // Lógica de parpadeo (ASUME Active LOW)
+  if (PENDING(ms, blink_start_ms, blink_interval_ms))
+    WRITE(EASYTHREED_LED_PIN, LOW); // ON
+  else if (PENDING(ms, blink_start_ms, 2 * blink_interval_ms))
+    WRITE(EASYTHREED_LED_PIN, HIGH); // OFF
+  else
+    blink_start_ms = ms;
+}
+
+//
+// Función Duplicada para el LED Extra (HOME_LED_PIN) - MISMA LÓGICA
+//
+void EasythreedUI::blinkLED2() {
+  static millis_t prev_home_interval_ms = 0, home_blink_start_ms = 0;
+
+  if (home_led_interval_ms == LED_OFF) { WRITE(HOME_LED_PIN, HIGH); return; } // OFF (HIGH)
+  if (home_led_interval_ms >= LED_ON)  { WRITE(HOME_LED_PIN,  LOW); return; } // ON (LOW)
+
+  const millis_t ms = millis();
+  if (prev_home_interval_ms != home_led_interval_ms) {
+    prev_home_interval_ms = home_led_interval_ms;
+    home_blink_start_ms = ms;
+  }
+  
+  // Lógica de parpadeo (ASUME Active LOW)
+  if (PENDING(ms, home_blink_start_ms, home_led_interval_ms))
+    WRITE(HOME_LED_PIN, LOW); // ON
+  else if (PENDING(ms, home_blink_start_ms, 2 * home_led_interval_ms))
+    WRITE(HOME_LED_PIN, HIGH); // OFF
+  else
+    home_blink_start_ms = ms;
+}
+
+
+//
+// Filament Load/Unload Button (Actualizado para controlar HOME_LED_PIN también)
+//
+void EasythreedUI::loadButton() {
+  if (printingIsActive()) return;
+
+  enum FilamentStatus : uint8_t { FS_IDLE, FS_PRESS, FS_CHECK, FS_PROCEED };
+  static uint8_t filament_status = FS_IDLE;
+  static millis_t filament_time = 0;
+
+  switch (filament_status) {
+
+    case FS_IDLE:
+      if (!READ(BTN_RETRACT) || !READ(BTN_FEED)) {
+        filament_status++;
+        filament_time = millis();
+      }
+      break;
+
+    case FS_PRESS:
+      if (ELAPSED(millis(), filament_time, BTN_DEBOUNCE_MS)) {
+        if (!READ(BTN_RETRACT) || !READ(BTN_FEED)) {
+          thermalManager.setTargetHotend(210, 0); 
+          blink_interval_ms = LED_BLINK_7;
+          home_led_interval_ms = LED_BLINK_7; // Sincronizado
+          filament_status++;
+        }
+        else
+          filament_status = FS_IDLE;
+      }
+      break;
+
+    case FS_CHECK:
+      if (READ(BTN_RETRACT) && READ(BTN_FEED)) {
+        blink_interval_ms = LED_ON;
+        home_led_interval_ms = LED_ON; // Sincronizado
+        filament_status = FS_IDLE;
+        thermalManager.disable_all_heaters();
+      }
+      else if (thermalManager.degHotend(0) >= 210) {
+        filament_status++;
+        blink_interval_ms = LED_BLINK_5;
+        home_led_interval_ms = LED_BLINK_5; // Sincronizado
+      }
+      break;
+
+    case FS_PROCEED: {
+      static bool flag = false;
+      if (READ(BTN_RETRACT) && READ(BTN_FEED)) {
+        flag = false;
+        filament_status = FS_IDLE;
+        quickstop_stepper();
+        thermalManager.disable_all_heaters();
+        blink_interval_ms = LED_ON;
+        home_led_interval_ms = LED_ON; // Sincronizado
+      }
+      else if (!flag) {
+        flag = true;
+        // La secuencia de comandos G-code de Carga/Descarga se mantiene
+        queue.inject(!READ(BTN_RETRACT) ? F("G91\nG0 E540 F2000\nG0 E60 F120\nG90\nM400\nM104 S0") : F("G91\nG1 E3 F180\nG1 E-40 F3000\nG1 E-560 F1000\nG90\nM104 S0"));
+      }
+    } break;
+  }
+}
+
+#if HAS_STEPPER_RESET
+  void disableStepperDrivers();
+#endif
+
+//
+// Print Start/Pause/Resume Button (Actualizado para controlar HOME_LED_PIN también)
+//
+void EasythreedUI::printButton() {
+  enum KeyStatus : uint8_t { KS_IDLE, KS_PRESS, KS_PROCEED };
+  static uint8_t key_status = KS_IDLE;
+  static millis_t key_time = 0;
+
+  enum PrintFlag : uint8_t { PF_START, PF_PAUSE, PF_RESUME };
+  static PrintFlag print_key_flag = PF_START;
+
+  const millis_t ms = millis();
+
+  // Resetear el estado del botón si la impresión terminó por sí sola
+  if (!printingIsActive() && print_key_flag != PF_START && !print_job_timer.isPaused()) {
+      print_key_flag = PF_START;
+      home_led_interval_ms = LED_ON; // HOME LED a ON al finalizar
+  }
+
+  switch (key_status) {
+    case KS_IDLE:
+      if (!READ(BTN_PRINT)) {
+        key_time = ms;
+        key_status++;
+      }
+      break;
+
+    case KS_PRESS:
+      if (ELAPSED(ms, key_time, BTN_DEBOUNCE_MS))
+        key_status = READ(BTN_PRINT) ? KS_IDLE : KS_PROCEED;
+      break;
+
+    case KS_PROCEED:
+      if (!READ(BTN_PRINT)) break;
+      key_status = KS_IDLE;
+      if (PENDING(ms, key_time, 1200 - BTN_DEBOUNCE_MS)) {
+        switch (print_key_flag) {
+          case PF_START: {
+            if (printingIsActive()) break;
+            blink_interval_ms = LED_BLINK_2;
+            home_led_interval_ms = LED_BLINK_2; // HOME LED a parpadeo
+            print_key_flag = PF_PAUSE;
+            card.mount();
+            if (!card.isMounted()) {
+              blink_interval_ms = LED_OFF;
+              home_led_interval_ms = LED_OFF; // HOME LED a OFF
+              print_key_flag = PF_START;
+              return;
+            }
+            card.ls();
+            const int16_t filecnt = card.get_num_items();
+            if (filecnt == 0) return;
+            card.selectFileByIndex(filecnt);
+            card.openAndPrintFile(card.filename);
+            
+            // --- FIX: Resetear flujo y feedrate al iniciar impresión nueva ---
+            shared_flowrate = 100;
+            shared_feedrate_index = 1; 
+
+          } break;
+          case PF_PAUSE: {
+            blink_interval_ms = LED_ON;
+            home_led_interval_ms = LED_ON; // HOME LED a ON
+            queue.inject(F("M25")); // Pausa
+            print_key_flag = PF_RESUME;
+          } break;
+          case PF_RESUME: {
+            blink_interval_ms = LED_BLINK_2;
+            home_led_interval_ms = LED_BLINK_2; // HOME LED a parpadeo
+            queue.inject(F("M24")); // Reanudar
+            print_key_flag = PF_PAUSE;
+          } break;
+        }
+      }
+      else {
+        // Pulsación Larga
+        if (print_key_flag == PF_START && !printingIsActive())  {
+          blink_interval_ms = LED_ON;
+          home_led_interval_ms = LED_ON; // HOME LED a ON
+          queue.inject(F("G91\nG0 Z20 F600\nG90")); // Subir Z 20mm
+        }
+        else {
+          card.abortFilePrintSoon(); // Cancelar impresión
+          blink_interval_ms = LED_OFF;
+          home_led_interval_ms = LED_OFF; // HOME LED a OFF
+        }
+        planner.synchronize();
+        TERN_(HAS_STEPPER_RESET, disableStepperDrivers());
+        print_key_flag = PF_START;
+        blink_interval_ms = LED_ON;
+        home_led_interval_ms = LED_ON; // Asegurar ON después de abortar
+      }
+      break;
+  }
+}
+
+//
+// Home Button (Actualizado para controlar HOME_LED_PIN)
+//
+void EasythreedUI::HomeButton() {
+  enum KeyStatus : uint8_t { KS_IDLE, KS_PRESS, KS_PROCEED };
+  static uint8_t key_status = KS_IDLE;
+  static millis_t key_time = 0;
+  
+  constexpr uint8_t feedrates[] = {50, 100, 125, 160, 200};
+
+  // --- Lógica del botón HOME ---
+  switch (key_status) {
+    case KS_IDLE:
+      if (!READ(BTN_HOME)) {
+        key_time = millis();
+        key_status = KS_PRESS;
+      }
+      break;
+
+    case KS_PRESS:
+      if (ELAPSED(millis(), key_time, BTN_DEBOUNCE_MS)) {
+        key_status = READ(BTN_HOME) ? KS_IDLE : KS_PROCEED;
+      }
+      break;
+
+    case KS_PROCEED:
+      if (!READ(BTN_HOME)) break;
+      key_status = KS_IDLE;
+      const millis_t ms = millis();
+
+      // Condición para saber si está imprimiendo
+      bool is_printing = printingIsActive() || print_job_timer.isRunning() || print_job_timer.isPaused();
+
+      if (is_printing) {
+        // Ciclar Velocidad de Impresión (Feedrate)
+        shared_feedrate_index = (shared_feedrate_index + 1) % COUNT(feedrates);
+        
+        // --- HOME LED: Parpadeo variable basado en el nuevo feedrate ---
+        uint16_t speed_factor = feedrates[shared_feedrate_index];
+        int32_t calc_interval = 1000 - (speed_factor * 4); // 50% -> 800ms; 200% -> 200ms
+        home_led_interval_ms = constrain(calc_interval, 100, 800);
+        
+        char cmd[20];
+        sprintf_P(cmd, PSTR("M220 S%d"), feedrates[shared_feedrate_index]);
+        queue.inject(cmd);
+      } else {
+        // --- HOME LED: Encendido Fijo (Mismo que LED_ON) al hacer Home ---
+        home_led_interval_ms = LED_ON; 
+
+        if (PENDING(ms, key_time + 1200 - BTN_DEBOUNCE_MS)) {
+          // Pulsación Corta: Home
+          queue.inject(F("G28"));
+        } else {
+          // Pulsación Larga: Home + MPC Autotune + Save
+          queue.inject(F("G28\nM306 T\nM500")); 
+        }
+      }
+      break;
+  }
+}
+
+// ... El resto de las funciones HandleButton1 a HandleButton4 no necesitan cambios adicionales ...
+
+void EasythreedUI::HandleButton1() {
+  static uint8_t key1_status = 0;
+  static millis_t key1_time = 0;
+  // Usa shared_flowrate
+  const millis_t ms = millis();
+
+  switch (key1_status) {
+    case 0:
+      if (!READ(BTN_1)) {
+        key1_time = ms;
+        key1_status = 1;
+      }
+      break;
+
+    case 1:
+      if (ELAPSED(ms, key1_time, BTN_DEBOUNCE_MS)) {
+        key1_status = READ(BTN_1) ? 0 : 2;
+      }
+      break;
+
+    case 2:
+      if (READ(BTN_1)) {
+        key1_status = 0;
+
+        if (printingIsActive()) {
+          // Aumentar flujo con variable compartida
+          shared_flowrate = min(shared_flowrate + 5, 200);
+          char cmd[20];
+          sprintf_P(cmd, PSTR("M221 S%d"), shared_flowrate);
+          queue.inject(cmd);
+        } else {
+          queue.inject(F("G0 Z20\nG0 X100 Y100 F3000\nG0 Z30"));
+        }
+      }
+      break;
+  }
+}
+
+void EasythreedUI::HandleButton2() {
+  static uint8_t key2_status = 0;
+  static millis_t key2_time = 0;
+  // Usa shared_flowrate
+  const millis_t ms = millis();
+
+  switch (key2_status) {
+    case 0:
+      if (!READ(BTN_2)) {
+        key2_time = ms;
+        key2_status = 1;
+      }
+      break;
+
+    case 1:
+      if (ELAPSED(ms, key2_time, BTN_DEBOUNCE_MS)) {
+        key2_status = READ(BTN_2) ? 0 : 2;
+      }
+      break;
+
+    case 2:
+      if (READ(BTN_2)) {
+        key2_status = 0;
+
+        if (printingIsActive()) {
+          // Reducir flujo con variable compartida
+          shared_flowrate = max(shared_flowrate - 5, 50);
+          char cmd[20];
+          sprintf_P(cmd, PSTR("M221 S%d"), shared_flowrate);
+          queue.inject(cmd);
+        } else {
+          queue.inject(F("G0 Z5\nG0 X107 Y7 F3000\nG0 Z0"));
+        }
+      }
+      break;
+  }
+}
+
+void EasythreedUI::HandleButton3() {
+  enum KeyStatus : uint8_t { KS_IDLE, KS_PRESS, KS_PROCEED };
+  static uint8_t key_status = KS_IDLE;
+  static millis_t key_time = 0;
+  const millis_t ms = millis();
+
+  switch (key_status) {
+    case KS_IDLE:
+      if (!READ(BTN_3)) {
+        key_time = ms;
+        key_status = KS_PRESS;
+      }
+      break;
+
+    case KS_PRESS:
+      if (ELAPSED(ms, key_time, BTN_DEBOUNCE_MS))
+        key_status = READ(BTN_3) ? KS_IDLE : KS_PROCEED;
+      break;
+
+    case KS_PROCEED:
+      if (!READ(BTN_3)) break;
+      key_status = KS_IDLE;
+
+      if (!print_job_timer.isRunning()) {
+        // No está imprimiendo → mover a esquina 3
+       queue.inject(F("G0 Z5\nG0 X107 Y105 F3000\nG0 Z0"));
+      }
+      else {
+        // Está imprimiendo → subir temperatura en 5°C (Lectura directa es consistente)
+        const int current = thermalManager.degTargetHotend(0);
+        const int new_temp = constrain(current + 5, 0, UI_MAX_TEMP);
+        char cmd[16];
+        sprintf_P(cmd, PSTR("M104 S%i"), new_temp);
+        queue.inject(cmd);
+      }
+      break;
+  }
+}
+
+void EasythreedUI::HandleButton4() {
+  static uint8_t key4_status = 0;
+  static millis_t key4_time = 0;
+  const millis_t ms = millis();
+
+  switch (key4_status) {
+    case 0:
+      if (!READ(BTN_4)) {
+        key4_time = ms;
+        key4_status = 1;
+      }
+      break;
+
+    case 1:
+      if (ELAPSED(ms, key4_time, BTN_DEBOUNCE_MS)) {
+        key4_status = READ(BTN_4) ? 0 : 2;
+      }
+      break;
+
+    case 2:
+      if (READ(BTN_4)) {
+        key4_status = 0;
+        if (!print_job_timer.isRunning()) {
+          // No está imprimiendo → mover a esquina 4
+         queue.inject(F("G0 Z5\nG0 X7 Y105 F3000\nG0 Z0"));
+        }
+        else {
+          // Está imprimiendo → bajar temperatura en 5°C
+          const int current = thermalManager.degTargetHotend(0);
+          const int new_temp = constrain(current - 5, 0, UI_MAX_TEMP);
+          char cmd[16];
+          sprintf_P(cmd, PSTR("M104 S%i"), new_temp);
+          queue.inject(cmd);
+        }
+      }
+      break;
+  }
+}
+#endif // EASYTHREED_UI
