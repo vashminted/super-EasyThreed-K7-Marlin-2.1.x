@@ -18,11 +18,11 @@ This mod assumes you are using at least:
 -MK8 hotend.
 
 # Features included
--MPC auto tune for the hoted, better than PID and more stable.
--improved functionality of the 4 leveling buttons, home button, and feed/retract switch.
--linear advance and input shaping are enabled by defaut.
--Heatbed is enabled, set to zero on slicer if not installed.
--Advanced pause and m600 command enabled for mid-print filament change.
+    -MPC auto tune for the hoted, better than PID and more stable.
+    -improved functionality of the 4 leveling buttons, home button, and feed/retract switch.
+    -linear advance and input shaping are enabled by defaut.
+    -Heatbed is enabled, set to zero on slicer if not installed.
+    -Advanced pause and m600 command enabled for mid-print filament change.
 
 Button behavior:
 
