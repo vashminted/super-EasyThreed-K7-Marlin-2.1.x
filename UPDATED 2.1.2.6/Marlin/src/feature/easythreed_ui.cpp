@@ -309,7 +309,7 @@ void EasythreedUI::HandleButton1() {
           shared_flowrate = min(shared_flowrate + 5, 200);
           char cmd[20]; sprintf_P(cmd, PSTR("M221 S%d"), shared_flowrate);
           queue.inject(cmd);
-        } else queue.inject(F("G0 Z20\nG0 X115 Y124 F3000\nG0 Z30"));
+        } else queue.inject(F("G0 Z20\nG0 X124 Y115 F3000\nG0 Z30"));
       }
       break;
   }
