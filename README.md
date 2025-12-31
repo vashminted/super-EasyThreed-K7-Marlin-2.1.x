@@ -6,7 +6,7 @@ basado en el gran trabajo de schmttc para las impresoras EasyThreed con placas e
 
 Actualizado a Marlin 2.1.X bugfix (oct 2025)
 
-Este firmware está destinado a usarse junto con mis mods para la EasyThreed K7, para reconstruir completamente la easythreed k7 y permitir el uso de motores paso a paso reales y un hotend. Los archivos STL y las imágenes de referencia se pueden encontrar en Printables y los archivos originales en Tinkercad.
+Este firmware está destinado a usarse junto con mis mods para la EasyThreed K7, para reconstruir completamente la easythreed k7 y permitir el uso de motores paso a paso reales y un hotend. Los archivos STL y las imágenes de referencia se pueden encontrar en [Printables](https://www.printables.com/model/1527034-super-easythreed-k7) y los archivos originales en Tinkercad.
 
 Este mod asume que estás usando al menos: 
 
