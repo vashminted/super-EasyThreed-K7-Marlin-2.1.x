@@ -3,13 +3,15 @@
 ### Complete upgrade for the EasyThreed K7
 Based on the great work of [schmttc](https://github.com/schmttc/EasyThreeD-K7-STM32) for the EasyThreed printers with **et4000+** boards.
 
-**Updated to Marlin 2.1.X bugfix (Dec 2025)**
+**Updated to Marlin 2.1.2.6**
 
 This firmware is intended to be used with my EasyThreed K7 mods to completely rebuild the printer using Nema 17 stepper motors and a standard hotend. 
 
-* **STL Files:** [Printables](https://www.printables.com/model/1527034-super-easythreed-k7)
-* **Original Files:** Tinkercad
+<img width="756" height="664" alt="Screenshot 2025-12-24 031906" src="https://github.com/user-attachments/assets/d533a417-b0a7-4f59-a185-824a3ec6577a" />
 
+
+* **STL Files:** [Printables](https://www.printables.com/model/1527034-super-easythreed-k7)
+* **Original Files:** [Tinkercad](https://www.tinkercad.com/things/4VaAuOSUpJB-easythreed-k7-complete-upgrade)
 ---
 
 ## Hardware Requirements
