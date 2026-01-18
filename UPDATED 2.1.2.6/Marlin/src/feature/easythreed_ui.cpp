@@ -163,7 +163,7 @@ void EasythreedUI::loadButton() {
       }
       else if (!flag) {
         flag = true;
-        queue.inject(!READ(BTN_RETRACT) ? F("G91\nG0 E540 F2000\nG0 E60 F120\nG90\nM400\nM104 S0") : F("G91\nG1 E3 F180\nG1 E-40 F3000\nG1 E-560 F1000\nG90\nM104 S0"));
+        queue.inject(!READ(BTN_RETRACT) ? F("G91\nG0 E540 F2000\nG0 E60 F120\nG90\nM400\nM104 S0") : F("G91\nG1 E3 F180\nG1 E-40 F3000\nG1 E-560 F1000\nG90\nM400\nM104 S0"));
       }
     } break;
   }

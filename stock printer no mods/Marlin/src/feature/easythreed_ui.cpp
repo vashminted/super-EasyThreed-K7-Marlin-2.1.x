@@ -129,7 +129,7 @@ void EasythreedUI::loadButton() {
       }
       else if (!flag) {
         flag = true;
-        queue.inject(!READ(BTN_RETRACT) ? F("M83\nG1 E-100 F120\nM400") : F("M83\nG1 E3 F180\nG1 E100 F120\nM400"));
+        queue.inject(!READ(BTN_RETRACT) ? F("M83\nG1 E10 F180\nG1 E-100 F120\nM400\nM104 S0") : F("M83\nG1 E100 F120\nM400\nM104 S0"));
       }
     } break;
   }
@@ -221,10 +221,8 @@ void EasythreedUI::HomeButton() {
         queue.inject(cmd);
       } else {
         if (PENDING(millis(), key_time + 1200 - BTN_DEBOUNCE_MS)) {
-          // Home y Esquina 1 (X10 Y10 para stock)
-          queue.inject(F("G28\nG0 Z5\nG0 X10 Y10 F2000\nG0 Z0"));
+          queue.inject(F("G28"));
         } else {
-          // Rutina PID avanzada con enfriamiento a 35C (LED Blink 7)
           blink_interval_ms = LED_BLINK_7; 
           queue.inject(F("G28\nG0 X50 Y50 Z1 F2000\nM106 S255\nM109 R35\nM400\nM303 E0 S210 C5 U1\nM500\nM107\nG0 Z15\nG0 X90 Y90 F2000"));
         }
@@ -246,7 +244,7 @@ void EasythreedUI::HandleButton1() {
           shared_flowrate = min(shared_flowrate + 5, 200);
           char cmd[20]; sprintf_P(cmd, PSTR("M221 S%d"), shared_flowrate);
           queue.inject(cmd);
-        } else queue.inject(F("G0 Z15\nG0 X50 Y50 F2000")); // Centro como zona segura
+        } else queue.inject(F("G0 Z15\nG0 X100 Y100 F2000")); 
       }
       break;
   }
@@ -265,7 +263,7 @@ void EasythreedUI::HandleButton2() {
           shared_flowrate = max(shared_flowrate - 5, 50);
           char cmd[20]; sprintf_P(cmd, PSTR("M221 S%d"), shared_flowrate);
           queue.inject(cmd);
-        } else queue.inject(F("G0 Z5\nG0 X0 Y100 F2000\nG0 Z0"));
+        } else queue.inject(F("G0 Z5\nG0 X100 Y0 F2000\nG0 Z0"));
       }
       break;
   }
@@ -302,7 +300,7 @@ void EasythreedUI::HandleButton4() {
           const int new_temp = constrain(thermalManager.degTargetHotend(0) - 5, 0, UI_MAX_TEMP);
           char cmd[16]; sprintf_P(cmd, PSTR("M104 S%i"), new_temp);
           queue.inject(cmd);
-        } else queue.inject(F("G0 Z5\nG0 X100 Y0 F2000\nG0 Z0"));
+        } else queue.inject(F("G0 Z5\nG0 X0 Y100 F2000\nG0 Z0"));
       }
       break;
   }
