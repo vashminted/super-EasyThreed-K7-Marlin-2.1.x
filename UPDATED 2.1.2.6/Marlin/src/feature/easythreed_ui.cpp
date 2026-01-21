@@ -139,7 +139,7 @@ void EasythreedUI::loadButton() {
     case FS_PRESS:
       if (ELAPSED(millis(), filament_time + BTN_DEBOUNCE_MS)) {
         if (!READ(BTN_RETRACT) || !READ(BTN_FEED)) {
-          thermalManager.setTargetHotend(230, 0);
+          thermalManager.setTargetHotend(220, 0);
           blink_interval_ms = LED_BLINK_7; 
           filament_status++;
         } else filament_status = FS_IDLE;
@@ -150,7 +150,7 @@ void EasythreedUI::loadButton() {
         blink_interval_ms = LED_OFF; filament_status = FS_IDLE;
         thermalManager.disable_all_heaters();
       }
-      else if (thermalManager.degHotend(0) >= 230) {
+      else if (thermalManager.degHotend(0) >= 220) {
         filament_status++; blink_interval_ms = LED_BLINK_5; 
       }
       break;

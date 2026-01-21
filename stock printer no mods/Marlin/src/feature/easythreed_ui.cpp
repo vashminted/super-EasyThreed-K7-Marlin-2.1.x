@@ -1,6 +1,23 @@
 /**
  * Marlin 3D Printer Firmware
- * EasyThreed K7 Stock Version (100x100)
+ * Copyright (c) 2021 MarlinFirmware [https://github.com/MarlinFirmware/Marlin]
+ *
+ * Based on Sprinter and grbl.
+ * Copyright (c) 2011 Camiel Gubbels / Erik van der Zalm
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
  */
 
 #include "../inc/MarlinConfigPre.h"
@@ -43,6 +60,9 @@ static uint8_t shared_flowrate = 100;
 static uint8_t shared_feedrate_index = 1;
 uint16_t blink_interval_ms = LED_OFF; 
 
+//
+// Initialize UI Pins
+//
 void EasythreedUI::init() {
   SET_INPUT_PULLUP(BTN_HOME);     SET_OUTPUT(BTN_HOME_GND);
   SET_INPUT_PULLUP(BTN_FEED);     SET_OUTPUT(BTN_FEED_GND);
@@ -57,6 +77,9 @@ void EasythreedUI::init() {
   blink_interval_ms = LED_OFF; 
 }
 
+//
+// Main UI Loop
+//
 void EasythreedUI::run() {
   blinkLED();
   loadButton();
@@ -68,6 +91,9 @@ void EasythreedUI::run() {
   HandleButton4();
 }
 
+//
+// Status LED logic (Inverted Logic Support)
+//
 void EasythreedUI::blinkLED() {
   static millis_t prev_blink_interval_ms = 0, blink_start_ms = 0;
   if (blink_interval_ms == LED_OFF) { WRITE(EASYTHREED_LED_PIN, HIGH); return; }
@@ -80,6 +106,8 @@ void EasythreedUI::blinkLED() {
   }
 
   uint16_t actual_interval = blink_interval_ms;
+
+  // LED Blink frequency scale based on print speed
   if (printingIsActive() && blink_interval_ms == LED_BLINK_2) {
     actual_interval = (feedrate_percentage > 100) ? (740 - (feedrate_percentage * 3.4)) : 400;
   }
@@ -92,6 +120,9 @@ void EasythreedUI::blinkLED() {
     blink_start_ms = ms;
 }
 
+//
+// Filament Load/Unload Button
+//
 void EasythreedUI::loadButton() {
   if (printingIsActive()) return;
   enum FilamentStatus : uint8_t { FS_IDLE, FS_PRESS, FS_CHECK, FS_PROCEED };
@@ -135,65 +166,94 @@ void EasythreedUI::loadButton() {
   }
 }
 
+//
+// Print Start/Pause/Resume Button
+//
 void EasythreedUI::printButton() {
   enum KeyStatus : uint8_t { KS_IDLE, KS_PRESS, KS_PROCEED };
   static KeyStatus key_status = KS_IDLE;
   static millis_t key_time = 0;
   enum PrintFlag : uint8_t { PF_START, PF_PAUSE, PF_RESUME };
   static PrintFlag print_key_flag = PF_START;
+
   static bool selection_mode = false;
   static uint8_t click_count = 0;
   static millis_t last_click_time = 0;
   static int16_t file_count = 0;
 
-  constexpr millis_t CLICK_TIMEOUT_MS = 5000, LONG_PRESS_MS = 1200;
+  constexpr millis_t CLICK_TIMEOUT_MS = 5000;
+  constexpr millis_t LONG_PRESS_MS    = 1200;
   const millis_t ms = millis();
 
+  // Selection Timeout logic
   if (selection_mode && ELAPSED(ms, last_click_time + CLICK_TIMEOUT_MS)) {
     int16_t index = (file_count - 1) - click_count; 
     if (index < 0) index = 0; 
-    wait_for_user = false; print_key_flag = PF_PAUSE;
+    wait_for_user = false; 
+    print_key_flag = PF_PAUSE;
     card.selectFileByIndex(index);
     card.openAndPrintFile(card.filename);
     blink_interval_ms = LED_BLINK_2; 
-    selection_mode = false; click_count = 0;
+    selection_mode = false;
+    click_count = 0;
   }
 
   switch (key_status) {
-    case KS_IDLE: if (!READ(BTN_PRINT)) { key_time = ms; key_status = KS_PRESS; } break;
-    case KS_PRESS: if (ELAPSED(ms, key_time + BTN_DEBOUNCE_MS)) key_status = READ(BTN_PRINT) ? KS_IDLE : KS_PROCEED; break;
+    case KS_IDLE:
+      if (!READ(BTN_PRINT)) { key_time = ms; key_status = KS_PRESS; }
+      break;
+    case KS_PRESS:
+      if (ELAPSED(ms, key_time + BTN_DEBOUNCE_MS))
+        key_status = READ(BTN_PRINT) ? KS_IDLE : KS_PROCEED;
+      break;
     case KS_PROCEED:
       if (!READ(BTN_PRINT)) break;
       key_status = KS_IDLE;
+
+      // SHORT PRESS REGISTER
       if (PENDING(ms, key_time + LONG_PRESS_MS - BTN_DEBOUNCE_MS)) {
         if (wait_for_user) {
-          blink_interval_ms = LED_BLINK_2; wait_for_user = false; 
+          blink_interval_ms = LED_BLINK_2;
+          wait_for_user = false; 
+          // Restore normal acceleration and speed on resume
           queue.inject(F("M201 X500 Y500\nM203 X60 Y60\nM108\nM24")); 
-          print_key_flag = PF_PAUSE; return;
+          print_key_flag = PF_PAUSE;
+          return;
         }
         if (!printingIsActive() && print_key_flag == PF_START) {
           if (!selection_mode) {
-            card.mount(); if (!card.isMounted()) return;
-            card.ls(); file_count = card.get_num_items();
+            card.mount();
+            if (!card.isMounted()) return;
+            card.ls();
+            file_count = card.get_num_items();
             if (file_count <= 0) return;
-            selection_mode = true; click_count = 0; blink_interval_ms = LED_ON; 
+            selection_mode = true;
+            click_count = 0; 
+            blink_interval_ms = LED_ON; 
           } else {
-            click_count++; if (click_count > 4) click_count = 0;
+            click_count++;
+            if (click_count > 4) click_count = 0;
             WRITE(EASYTHREED_LED_PIN, HIGH); safe_delay(60); 
           }
-          last_click_time = ms; return;
+          last_click_time = ms;
+          return;
         }
         if (printingIsActive() && print_key_flag != PF_RESUME) {
           blink_interval_ms = LED_BLINK_7;
+          // Soft Parking: Limited acceleration and speed
           queue.inject(F("M201 X500 Y500\nM203 X60 Y60\nM125\nM25\nM0")); 
-          print_key_flag = PF_RESUME; return;
+          print_key_flag = PF_RESUME;
+          return;
         }
-      } else {
+      } 
+      // LONG PRESS REGISTER
+      else {
         if (printingIsActive() || wait_for_user || selection_mode) {
-          card.abortFilePrintSoon(); wait_for_user = false; selection_mode = false;
+          card.abortFilePrintSoon();
+          wait_for_user = false; selection_mode = false;
           print_key_flag = PF_START; blink_interval_ms = LED_OFF;
         } else if (print_key_flag == PF_START) {
-          queue.inject(F("M201 X500 Y500\nG91\nG1 Z20 F100\nG90"));
+          queue.inject(F("M201 X500 Y500\nG91\nG1 Z20 F300\nG90"));
           blink_interval_ms = LED_ON;
         }
         planner.synchronize();
